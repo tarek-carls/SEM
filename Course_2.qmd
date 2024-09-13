@@ -1,0 +1,365 @@
+---
+title: "Course #1 - Introduction to SEM"
+format: 
+  revealjs:
+    scrollable: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, size = "tiny")
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+
+```
+
+# Introduction to ML SEM
+
+## 
+
+- limitations of the multilevel regression model:
+
+  - (mostly) univariate perspective (multivariate is possible but awkward)
+  - no measurement models (latent variables)
+– no mediators (only strictly dependent or independent variables)
+– no reciprocal effects, no goodness-of-fit measures, . . .
+• two evolutions since the late 1980s:
+– the multilevel regression framework was extended to include measurement errors and latent variables (cfr. HLM and MLwiN software)
+– the traditional SEM framework started to incorporate random intercepts and random slopes
+• the boundaries between SEM and multilevel regression have gradually disappeared
+
+## Frameworks
+
+• two-level SEM with random intercepts
+– Mplus (type = twolevel), LISREL, EQS, lavaan
+• the gllamm framework: gllamm, (related approach: Latent Gold)
+• the Mplus framework: Mplus
+• the case-wise likelihood based approach (e.g., Mehta & Neale, 2005)
+– Mplus (type = random), Mx, OpenMx (definition variables)
+– in principle: both continuous and categorical outcomes; random slopes
+– xxM?
+• the Bayesian framework
+– Mplus
+– (Open)BUGS, JAGS, Stan
+
+
+## The gold standard: two-level SEM with random intercepts
+
+• an extension of single-level SEM to incorporate random intercepts
+• extensive technical literature, starting from the late 1980s (until about 2004)
+• available in Mplus, EQS, LISREL, lavaan, . . .
+• this is by far the most widely used framework in the applied literature
+• advantages:
+– fast, simple, well-understood, plenty of examples
+– well-documented
+• disadvantages:
+– continuous outcomes only
+– no random slopes
+
+## lavaan
+
+• multilevel SEM development just started (jan 2017)
+• implemented in the development version (0.6-1):
+– standard two-level ‘within-and-between’ approach
+– continuous responses only, no missing data (for now)
+– no random slopes (for now)
+– using quasi-newton optimization (for now)
+• future plans: many
+– gllamm framework (but more user-friendly)
+– case-wise likelihood approach
+– hybrids
+
+## lavaan
+
+let's get started
+```{r}
+library(lavaan)
+library(tidyverse)
+df <- read.csv(file="./data/test.csv")
+head(df)
+```
+
+
+## lavaan syntax
+
+
+:::: {.columns}
+
+::: {.column width="30%"}
+![](.\images\multilevel.png)
+:::
+
+
+::: {.column width="70%"}
+```{r}
+model <- '
+  
+  level: 1
+  
+   # our within level
+   
+   level: 2
+   
+   # our between level
+
+'
+
+# fit <- sem(model,data,cluster="cluster_var")
+```
+
+:::
+
+::::
+
+## Two-Level SEM with random intercepts
+
+* We assume two-level data with individuals nested within teams
+* We decompose the total score of each variable into two parts: A within and a between part:
+
+$\mathbf{y}_{ji} = (\mathbf{y}_{ji}-\bar{\mathbf{y}_j})+\bar{\mathbf{y}_j}$
+
+$\mathbf{y}_T = \mathbf{y}_W + \mathbf{y}_B$
+
+where j = 1, . . . , J is an index for the clusters, and i = 1, . . . , nj is an index for the units within a cluster; $\bar{\mathbf{y}}_j$ is the cluster mean of cluster $j$
+
+* both components are treated as unknown (latent) variables
+* the two parts are orthogonal and additive
+
+## Fit a basic model
+
+
+![](.\images\mult2.png)
+
+
+```{r}
+model2 <- '
+  level:1
+  Bout_w =~ a*bout_1_t1 + b*bout_2_t1+c*bout_3_t1 + d*bout_4_t1
+  Bout_w ~ age_t1 + sex_t1
+
+  level:2
+  Bout_b =~ a*bout_1_t1 + b*bout_2_t1+c*bout_3_t1 + d*bout_4_t1
+  Bout_b ~ age_sd
+
+  # optional
+  
+  bout_1_t1~~0*bout_1_t1
+  bout_2_t1~~0*bout_2_t1
+  bout_3_t1~~0*bout_3_t1
+  bout_4_t1~~0*bout_4_t1
+'
+
+fit2 <- sem(model2,data=df,cluster="cluster_id",
+          fixed.x=FALSE)
+summary(fit2,standardized=T,fit.measures=T)
+```
+
+
+## Different types of latent variables
+
+• we will discuss fur different construct types:
+
+1. within-only construct: in this case, if we have no other level-2 variables, we may as well
+use a single-level SEM based on a pooled within-cluster covariance matrix
+2. between-only construct
+3. shared between-level construct
+4. configural (or contextual) construct
+
+## Within-only
+
+* indicators of the latent variable are measured at the within level
+* level at which construct is of interest: within level only
+* interpretation at the within level: construct explains the covariances between its indicators measured at the within level
+* interpretation at the between level: not relevant
+* although the construct only ‘exists’ at the within level, we may still observe ‘spurious’ between-level variation in the sample
+* example: construct represents ‘lactose intolerance’
+- items inquire about the degree of severity of physical reactions after consuming products containing lactose
+– construct can not be a team-level characteristic, although we may
+observe differences (on average) across teams
+
+## within only
+
+
+![](.\images\within1.png)
+
+
+
+```{r}
+model3 <- '
+  level:1
+  
+  fw =~ y1 + y2 + y3 + y4 
+  
+  level:2
+
+  # optional
+
+  y1 ~~ y1 + y2 + y3 + y4 
+  y2 ~~ y2 + y3 + y4 
+  y3 ~~ y3 + y4 
+  y4 ~~ y4
+'
+
+```
+
+## Between-only construct
+
+* indicators of the latent variable are measured at the between level
+* level at which construct is of interest: between level only
+* interpretation at the within level: not relevant (does not ‘exist’ at the within level)
+* interpretation at the between level: construct explains the covariances between its indicators measured at the between level
+* example: construct reflects self-reported ‘leadership style’ measured by a questionnaire filled in by the leader
+
+
+## between only
+
+
+![](.\images\between.png)
+
+
+```{r}
+model4 <- '
+  level:1
+  
+  
+  level:2
+
+  # optional
+
+  fb =~ y1 + y2 + y3 + y4
+'
+
+```
+
+
+## Shared between-level construct
+
+* indicators of the latent variable are measured at the within level
+* level at which construct is of interest: between level only
+* interpretation at the within level: none
+* interpretation at the between level: construct represents a characteristic of
+the cluster
+* example: construct reflects ‘leadership quality’ (team characteristic) as perceived by members
+* each member in each team was asked to judge the ‘leadership quality’ of the leaders of that team
+* we are interested in the ‘average’ responses of the individual member within each team
+* responses within each team should be highly correlated (high
+agreement) if indeed ‘leadership quality’ is a shared construct
+
+
+## Shared between-level
+::::{columns}
+::{.column width=40%}
+![](.\images\sharedbetween.png)
+::
+::{.column width=60%}
+
+```{r}
+model4 <- '
+  level:1
+  
+  y1 ~~ y1 + y2 + y3 + y4 
+  y2 ~~ y2 + y3 + y4 
+  y3 ~~ y3 + y4 
+  y4 ~~ y4
+  
+  level:2
+
+  fs =~ y1 + y2 + y3 + y4
+
+'
+
+```
+::
+::::
+
+## Configural Construct
+
+• indicators of the latent variable are measured at the within level
+• level at which construct is of interest: both within and between level
+• interpretation at the within/between level: construct explains the covariances
+of the within/between part of its indicators
+• the configural construct (at the between level) represents the aggregate of
+the measurements of individuals within a cluster
+• example: reading motivation:
+– at the individual level (within cluster)
+– at the school level (average student motivation within a school)
+• the cluster itself is not seen as the source/reason for variability of an individual construct
+• therefore, between-cluster loadings are fixed to be the same as within-cluster
+loadings (cross-level measurement invariance)
+
+
+
+
+
+## Configural
+
+::::{columns}
+::{.column width=40%}
+![](.\images\configural.png)
+::
+::{.column width=60%}
+
+```{r}
+model4 <- '
+  level:1
+  
+  fw =~ a*y1 + b*y2 + c*y3 + d*y4
+  
+  level:2
+
+  fs =~ a*y1 + b*y2 + c*y3 + d*y4
+
+'
+
+```
+::
+::::
+
+
+## Stepwise approach
+
+* model 1: a factor/structural model at the within level + a null model at the between level
+
+ a null model implies: zero variances and covariances for all (6) variables
+ 
+– if this model fits well, we would conclude that there is no between structure at all: we may as well continue with a single-level
+analysis
+
+• model 2: a factor/structural model at the within level + an independence model at the between level
+
+– independence model implies: estimated variances but zero covariances
+– if this model holds, there is between-level variance, but no substantively interesting structural model
+
+* model 3: a factor/structural model at the within level + a saturated model at the between level
+– the factors at the within-level in this model correspond to what we have called ‘within-only’ constructs
+
+
+## A note on fit
+
+Basically, most fit indices work similarly to single-level models, thats why we do not repeat them here. BUT: recently some discussion emerged on whether global fit measures are sensitive to level 2 misspecification. 
+
+A solution would be to look at the SRMR which is calculated for the respective level. Often you will find some kind of misspecification on the between-level.
+
+## Residuals
+
+```{r}
+residuals <- lavInspect(fit2, "residuals")
+residuals
+
+```
+## Residuals
+
+
+```{r}
+
+ggplot(reshape2::melt(residuals$cluster_id), aes(Var1, Var2, fill = value)) + 
+    geom_tile() + 
+    scale_fill_gradient2()+
+      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+ggsave(filename="residuals.png",height=7,width=7)
+```
+
+

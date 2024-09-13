@@ -1,0 +1,954 @@
+---
+title: "Course #1 - Introduction to SEM"
+format: 
+  revealjs:
+    scrollable: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, size = "tiny")
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+
+```
+
+
+# Introduction to SEM
+
+
+## Purpose
+
+This seminar introduces basic concepts of structural equation modeling (SEM) using lavaan in the R programming language.
+The emphasis is on **identifying various manifestations of SEM models** and **interpreting the output.**.
+
+
+**Fundamental topics covered include:**
+
+* Matrix notation
+- Identification
+- Model fit
+- Various kind of models...
+
+
+Assumption: All variables are continuous and normally distributed.
+
+
+# Introduction
+
+## What's SEM?
+
+
+Structural equation modeling (SEM) is a linear model framework that models both **simultaneous regression equations** with **latent variables**. 
+
+Special cases of SEM:
+
+* linear regression
+* multivariate regression
+* path analysis
+* confirmatory factor analysis
+* structural regression
+
+## What can we do in SEM?
+
+Using SEM, one can model the following relationships
+
+* observed to observed variables (e.g., regression)
+* latent to observed variables (e.g., confirmatory factor analysis)
+* latent to latent variables (e.g., structural regressoins)
+
+We can fit **measurement** (relating observed to latent variables) models and **structural** (relating latent to latent variables) models
+
+## Let's get started
+
+Now let's install lavaan
+
+```{r}
+# "install" commands are commented out since I have 
+# already installed it. I recommend running it 
+# in the console, not in markdown
+# install.packages("lavaan", dependencies = TRUE)
+library(lavaan)
+```
+
+## Let's import data
+
+
+```{r Data import}
+
+df <- read.csv("./data/test.csv")
+head(df)
+```
+
+## The Variance-Covariance Matrix
+
+The most essential component of a structural equation model is **covariance** between items. We can view the true population covariance within observed variables in the variance-covariance matrix which we shall call $\Sigma$.
+As we cannot observe the **true** variance-covariance matrix, we have to estimate it with our sample and call it $\hat{\Sigma} = S$, the sample variance-covariance matrix. In R, we can use the function cov() for it.
+
+## The Variance-Covariance Matrix
+
+Let's observe the variance-covariance matrix for four burnout and psychological safety items.
+
+```{r}
+cov(df[,2:7])
+```
+
+
+Using the sample variance-covariance, we can see how observed variables are connected to one another. The matrix is **symmetric** and should not be confused with the model-implied covariance matrix $\Sigma(\theta)$. 
+
+The sole purpose of any kind of SEM is to reproduce $\Sigma$ as accurately as possible using a set of parameters **$\theta$**, so that $\Sigma = \Sigma(\theta)$.
+
+## Definitions
+
+Let's clear up some key words
+
+\tiny
+
+- **observed variable**: a variable that exists in the data
+- **latent variable**: a variable that is constructed and does not exist in the data
+* **exogenous variable**: an independent variable either observed (x) or latent ($\xi$) that explains an endogenous variable
+* **endogenous variable**: a dependent variable, either observed (y) or latent ($\eta$) that has a explanatory path leading to it
+* **measurement model**: a model that links observed variables with latent variables
+* **indicator**: an observed variable in a measurement model (can be exogenous or endogenous)
+* **factor**: a latent variable defined by its indicators (can be exogenous or endogenous)
+
+## Definitions
+
+* **loading**: a path between an indicator and a factor
+* **structural model**: a model that specifies causal relationships among exogenous variables to endogenous variables (can be observed or latent)
+* **regression path**: a path between exogenous and endogenous variables (can be observed or latent)
+
+## Path diagrams
+
+Strange Greek math symbols and matrix equations are scary. Also, only nerds can pronounce, let alone understand this kind of notation. That's why we additionally provide **path diagrams**.
+
+![Path diagram symbols](./images/pathlegend1.png){width=40%}
+
+
+## Path diagrams
+
+Here, we see a regression of a factor (latent) on an item (observed). The right image depicts the variance of the factor.
+
+![Path diagram examples](./images/pathlegend2.png){width=70%}
+
+
+## Path diagrams
+
+Now let's have a look at all the possible symbols that we can encounter in path diagrams.
+
+![More examples](./images/pathlegend3.png){width=90%}
+
+## Basic lavaan syntax
+
+Let's have a look at lavaan's basic syntax:
+\small
+
+* **~** predict, used for regression of observed outcome to observed predictors (e.g., y ~ x)
+* **=~** indicator, used for latent variable to observed indicator in factor analysis measurement models (e.g., f =~ q + r + s)
+* **~~** covariance (e.g., x ~~ x)
+* **~1** intercept or mean (e.g., x ~ 1 estimates the mean of variable x)
+* **1* **fixes parameter or loading to one (e.g., f =~ 1*q)
+* **NA* **frees parameter or loading (useful to override default marker method, (e.g., f =~ NA*q)
+* **a* **labels the parameter ‘a’, used for model constraints (e.g., f =~ a*q)
+
+
+# Regression and Path Analysis
+
+## Simple Regression
+
+You will most likely know this equation:
+
+$y_1 = b_0 + b_1 x_1 + \epsilon_1$
+
+Here, $b_0$ is the intercept, $b_1$ is the coefficient and $x_1$ is the observed predictor while $\epsilon_1$ is the residual. 
+However, in SEM one often finds the LISREL notation, which reads as follows:
+
+$y_1 = \alpha + \gamma x_1 + \zeta_1$
+
+## Simple regression
+
+$y_1 = \alpha + \gamma x_1 + \zeta_1$
+
+![Visual representation of the matrix](./images/linreg1.png){width=90%}
+
+## Simple regression
+
+The standard way to run a linear regression in R is the lm() function from base R.
+
+
+```{r simple regression}
+
+m1a <- lm(Bout_t1 ~ Psysa_t1,data=df)
+fit1a <- summary(m1a)
+fit1a
+
+```
+
+## Simple regression in lavaan
+
+Now we estimate the same regression in lavaan(). Here, the intercept is not included by default so we have to add it.
+```{r, out.extra='\\scriptsize'}
+
+m1b <- '
+  # regression
+  Bout_t1 ~ 1 + Psysa_t1
+  # Variance
+  Psysa_t1 ~~ Psysa_t1 # this is estimated by default in lavaan
+'
+fit1b <- sem(m1b, data=df)
+summary(fit1b)
+```
+
+## Simple regression in lavaan
+
+Note that the "." in front of bout_t1 denotes an *endogenous variable*. 
+
+The (exogenous) intercept and variance ($\phi_{1}$) should match the observed mean and variance.
+
+```{r}
+mean(df$Psysa_t1)
+var(df$Psysa_t1)
+```
+
+## Multiple Regression
+
+In most cases, we are interested in more than one exogenous variable affectiong our outcome. Suppose we have one endogenous and two exogenous variable. Now let's write that down in matrix form:
+
+$y_1 = \alpha_1 + \mathbf{x \gamma} + \zeta_1$
+
+* $y_1$ is our endogenous variable aka outcome
+* $\alpha_1$ is the intercept of $y_1$
+* $\mathbf{x}$ is a vector of ($1$ x $q$) exogenous variables
+* $\mathbf{\gamma}$ is a vector of ($q$ x $1$) regression coefficients
+* $\zeta_1$ is the residual variance of $y_1$
+
+## Multiple Regression
+
+Having this matrix, we assume two things:
+
+$y_1 = \alpha_1 + \mathbf{x \gamma} + \zeta_1$
+
+* $E(\zeta) = 0$ (mean of the residuals is zero)
+* $cov(\zeta,\mathbf{x})=0$ (the residuals are uncorrelated with the exogenous variables)
+
+## Multiple Regression
+
+Let's model this visually:
+
+![Multiple Regression](./images/multreg1.png){width=90%}
+
+
+## Multiple Regression in lavaan
+
+```{r}
+m2 <- '
+  # Regressions
+  Bout_t1 ~ 1 + Psysa_t1 + Recov_t1
+  # Covariance
+  Psysa_t1 ~~ Recov_t1
+'
+fit2 <- sem(m2,data=df)
+summary(fit2)
+```
+
+<!-- ## Compare the results to lm() -->
+<!-- ```{r} -->
+<!-- fit2.1 <- lm(Bout_t1 ~ Psysa_t1 + Recov_t1,data=df) -->
+<!-- summary(fit2.1) -->
+<!-- ``` -->
+
+
+## Multivariate Regression
+
+\tiny
+
+Up to now, we focused on having one outcome at a time ($y_1$). Moving to multivariate regression, we estimate more than one outcome at a time ($y_1, y_2, ... , y_p$) with $p$ endogenous variables.
+Lets write that down in matrix notation:
+
+$\mathbf{y} = \mathbf{\alpha} + \mathbf{\Gamma} \mathbf{x} + \mathbf{\zeta}$
+
+Consider a case with two exogenous and two endogenous variables:
+
+$\begin{pmatrix}
+y_{1} \\
+y_{2}
+\end{pmatrix}
+=
+\begin{pmatrix}
+\alpha_1 \\
+\alpha_2
+\end{pmatrix}
++
+\begin{pmatrix}
+\gamma_{11} & \gamma_{12}\\
+0 & \gamma_{22}
+\end{pmatrix}
+\begin{pmatrix}
+x_1 \\
+x_2
+\end{pmatrix}
++
+\begin{pmatrix}
+\zeta_{1}\\
+\zeta_{2}
+\end{pmatrix}$
+
+* $\mathbf{y} = (y_1, \cdots, y_p)’$ vector of $p$ endogenous variables
+* $\mathbf{x}= (x_1, \cdots, x_q)’$ vector of $q$ exogenous variables
+* $\alpha$ vector of $p$ intercepts
+* $\mathbf{\Gamma}$ matrix of regression coefficients ($p$ x $q$) linking the endogenous with the exogenous variables whose $i$-th row indicates the endogenous variable and $j$-th column indicates the exogenous variable
+* $\mathbf{\zeta}= ( \zeta_1, \cdots, \zeta_p)’$ vector of $p$ residuals
+
+## Multivariate Regression
+
+Let's see a visual example of a multivariate regression:
+
+![Multivariate Regression](.\images\mvreg1.png)
+
+Let $x_1$ be Psysa_t1, $y_1$ be Bout_t1, $x_2$ be Recov_t1 and $y_2$ be Detach_t1. The parameters $\phi_{11},\phi_{22},\phi_{12}$ represent the (co)variance in the exogenous variables, the parameters $\zeta_1, \zeta_2$ refer to the residuals of $y_1$ and $y_2$, the parameters $\psi_{11},\psi_{12}$ represent the residual *variances* in the endogenous variables.
+
+## Multivariate Regression
+
+```{r}
+m3a <- '
+  # Regressions
+  Bout_t1 ~ 1 + Psysa_t1 + Detach_t1
+  Recov_t1 ~ 1 + Detach_t1
+'
+fit3a <- sem(m3a,data=df)
+summary(fit3a)
+```
+
+## Multivariate Regression
+
+Are these results the same that we would get with two separate OLS regressions? Let's find out:
+
+```{r}
+m3b <- lm(Bout_t1 ~ Psysa_t1 + Detach_t1,data=df)
+summary(m3b)
+
+```
+## Multivariate Regression
+
+```{r}
+m3c <- lm(Recov_t1 ~ Detach_t1,data=df)
+summary(m3c)
+
+```
+
+## Multivariate Regression
+
+We observe a slight difference in coefficients. What could be the cause?
+
+lavaan by default will covary residual variances of endogenous variables. Let's override this default.
+
+![Multivariate Regression without covariance between residual variances](.\images\mvreg2.png)
+
+## Multivariate Regression
+
+Setting the covariance of the residual variables $\psi_{12}$ to zero looks like this in lavaan:
+
+```{r}
+m3d <- '
+  # Regressions
+  Bout_t1 ~ 1 + Psysa_t1 + Detach_t1
+  Recov_t1 ~ 1 + Detach_t1
+  # Covariance
+  Bout_t1 ~~ 0*Recov_t1
+'
+fit3d <- sem(m3d,data=df)
+summary(fit3d)
+```
+
+
+## Known values, parameters, degrees of freedom
+
+Both simple regression and multiple regression are **saturated** (or: *identified*) models which means that all parameters are fully estimated and there are no degrees of freedom. The moment we enter multivariate regression territorium, this must not be the case. Models 3a and 3d have one, respectively two degrees of freedom. 
+
+But what does that mean?
+
+## Known values, parameters, degrees of freedom
+
+Let's calculate degrees of freedom. We start with the number of known parameters from the variance-covariance matrix $\Sigma$. This is basically the number of individual variances and covariances in the matrix and can be calculated as follows: $p(p+1)/2$, where $p$ is the number of observed variables in the matrix.
+
+## Known values, parameters, degrees of freedom
+
+Now let's look at our case:
+
+```{r}
+cov(df[,c("Bout_t1","Psysa_t1","Detach_t1","Recov_t1")])
+```
+
+We have 4 observed variables, hence we have $4(4+1)/2=10$ known values, which serves as the upper limit of parameters that we could possibly estimate. A model with less than 10 parameters is over-identified, a model with 10 parameters is just-identified, a model with more than 10 parameters is under-identified.
+
+## Known values, parameters, degrees of freedom
+
+Next, we need to know the number of *free* parameters:
+
+number of free parameters = number of model parameters - number of fixed parameters
+
+$df$ = number of known values - number of free parameters
+
+## Just-identified model
+
+Now that we know how to distinguish between over-identified and just-identified models, we understand that adding another path turns Model 3A into a **just-identified** or **fully saturated model** which we call Model 3E.y
+
+![Just-identified model](.\images\fullsat1.png)
+
+
+## Just-identified model
+```{r}
+m3e <- '
+  # Regressions
+  Bout_t1 ~ 1 + Psysa_t1 + Detach_t1
+  Recov_t1 ~ 1 + Psysa_t1 + Detach_t1
+'
+fit3e <- sem(m3e,data=df)
+summary(fit3e)
+```
+
+## Path Analysis
+
+Now let's take another step. As for now, we have dabbled with multivariate regression, which is, to be precise, a special case of **path analysis**. Path analysis is a more general model where endogenous variables are allowed to predict other endogenous variables.
+
+We know our matrix $\mathbf{\Gamma}$ which specifies relationships between exogenous ($x$) and endogenous ($y$) variables. Now we need a new matrix $B$ specifying relationships between endogenous variables. Hence our new set of equations is denoted in matrix notation as follows:
+
+$\mathbf{y = \alpha + \Gamma x + By + \zeta}$
+
+## Path Analysis
+
+Let's put this to action: 
+
+We believe, that Recovery might also predict Burnout:
+![Path Analysis](.\images\pathanalysis1.png)
+
+## Path Analysis
+
+In matrix notation:
+
+$\begin{pmatrix}
+y_{1} \\
+y_{2}
+\end{pmatrix}
+=
+\begin{pmatrix}
+\alpha_1 \\
+\alpha_2
+\end{pmatrix}
++
+\begin{pmatrix}
+\gamma_{11} & \gamma_{12}\\
+0 & \gamma_{22}
+\end{pmatrix}
+\begin{pmatrix}
+x_1 \\
+x_2
+\end{pmatrix}
++
+\begin{pmatrix}
+0 & 0\\
+\beta_{21} & 0
+\end{pmatrix}
+\begin{pmatrix}
+y_1 \\
+y_2
+\end{pmatrix}
++
+\begin{pmatrix}
+\zeta_{1}\\
+\zeta_{2}
+\end{pmatrix}$
+
+
+## Path Analysis
+
+Let's write that down in lavaan:
+
+```{r}
+m4a <- '
+  # Regression
+  Bout_t1 ~ 1 + Psysa_t1 + Detach_t1
+  Recov_t1 ~ 1 + Bout_t1 + Detach_t1 
+'
+fit4a <- sem(m4a,data=df)
+summary(fit4a)
+```
+
+
+## Modification index
+
+The models 4a (path analysis) as well as the models of multivariate regression were over-saturated (over-identified) models which means that their degrees of freedom is greater than zero. This gives us some flexibility in modeling the remaining degrees of freedom. In our model 4a we can add a covariance between the residuals of **Bout_t1** and **Recov_t1**. We also could add a path from **Psysa_t1** to **Recov_t1**. But how do we know what would make sense from an empirical standpoint?
+
+Here come *modification indices* into play. This is a 1 df chi-square test that assesses how the model chi-square will change as a result of adding a specific parameter to the model. The higher the change, the bigger the impact on the model's fit.
+
+## Modification index
+
+Let's put this to work:
+```{r}
+modindices(fit4a,sort=T)
+```
+
+## Modification index
+
+```{r}
+m4b <- '
+  # Regression
+  Bout_t1 ~ 1 + Psysa_t1 + Detach_t1
+  Recov_t1 ~ 1 + Bout_t1 + Detach_t1 
+  # Modification
+  Bout_t1 ~~ Recov_t1
+'
+fit4b <- sem(m4b,data=df)
+summary(fit4b)
+```
+
+## Modification index
+
+```{r}
+m4c <- '
+  # Regression
+  Bout_t1 ~ 1 + Psysa_t1 + Detach_t1
+  Recov_t1 ~ 1 + Bout_t1 + Detach_t1 
+  # Modification
+  Psysa_t1 ~ Recov_t1
+'
+fit4c <- sem(m4c,data=df)
+summary(fit4c)
+```
+
+
+## Modification index
+
+```{r}
+modindices(fit4c,sort=T)
+```
+
+
+## Model Fit 
+
+Modification indexes gives suggestions about ways to improve model fit, but it is helpful to assess the model fit of your current model to see if improvements are necessary. As we have seen, multivariate regression and path analysis models are not always saturated, meaning the degrees of freedom is not zero. This allows us to look at what are called Model Fit Statistics, which measure how closely the (population) model-implied covariance matrix $\Sigma(\theta)$ matches the (population) observed covariance matrix $\Sigma$. SEM is also known as covariance structure analysis, which means the hypothesis of interest is regarding the covariance matrix. The null and alternative hypotheses in an SEM model are
+
+$H_0: \Sigma{(\theta)}=\Sigma$
+
+$H_1: \Sigma{(\theta)} \ne \Sigma$
+
+## Model chi-Square
+
+To evaluate the model fit, lavaan provides a chi-square test. This is, very simply spoken, a chi-square difference test between the observed variance-covariance matrix $\Sigma$ and the model-implied variance-covariance matrix $\Sigma(\theta)$. By definition, the chi-square test can only be calculated when the model is over-identified (df > 0). The goal of the chi-square test is to accept the Null Hypothesis, i.e., have a $p-$value of > .05. The chi-square test is sensible to sample size with the test being reasonable at $100 < n < 400$ but will become significant very quickly at $n > 400$.
+
+## Sample size
+
+As we just discussed the sensitivity of chi-square tests to sample size, lets take a quick break to discuss appropriate sample sizes. Determining the needed sample size is difficult in SEM, but there are good rules of thumb: Kline (2016) proposes the $N:q$ rule, which states that the sample sizes should be determined by the number of parameters in your model. Kline recommends a $20:1$ ratio. Which means, with 10 paramters we should have at least n=200. Samples below 100 are almost always inappropriate.
+
+
+## The Baseline Model
+
+It's always there in our output - but what the hell is it?
+
+It's the worst fitting model - variances of the observed variables only. No covariances, no nothing.
+
+![Baseline Model](.\images\baseline.png)
+
+## The Baseline Model
+
+We can fit that in lavaan.
+
+```{r}
+m4d <- '
+  Bout_t1 ~~ Bout_t1
+  Psysa_t1 ~~ Psysa_t1
+  Recov_t1 ~~ Recov_t1
+  Detach_t1 ~~ Detach_t1
+'
+fit4d <- sem(m4d,data=df)
+summary(fit4d,fit.measures=T)
+```
+
+## Incremental vs. absolute fit
+
+We distinguish between two types of fit indices: Absolute and incremental indices.
+
+
+ An incremental fit index (a.k.a. relative fit index) assesses the ratio of the deviation of the user model from the worst fitting model (a.k.a. the baseline model) against the deviation of the saturated model from the baseline model. Conceptually, if the deviation of the user model is the same as the deviation of the saturated model (a.k.a best fitting model), then the ratio should be 1. Alternatively, the more discrepant the two deviations, the closer the ratio is to 0 (see figure below). Examples of incremental fit indexes are the CFI and TLI.
+ 
+ ## Incremental Fit
+ 
+ ![Incremental Fit Index](.\images\incfit.png)
+
+## Absolute Fit
+
+An absolute fit index on the other hand, does not compare the user model against a baseline model, but instead compares it to the observed data. An example of an absolute fit index is the RMSEA.
+
+![](.\images\absfit.png)
+
+## CFI
+
+Comparative Fit Index:
+
+$CFI= \frac{\delta(\mbox{Baseline}) – \delta(\mbox{User})}{\delta(\mbox{Baseline})}$
+
+Suppose $\delta = \chi^2-df$. The closer $\delta(user)$ is to zero, the better the model fit.
+
+## TLI
+
+Tucker-Lewis Index:
+
+$TLI= \frac{\chi^2(\mbox{Baseline})/df(\mbox{Baseline})-\chi^2(\mbox{User})/df(\mbox{User})}{\chi^2(\mbox{Baseline})/df(\mbox{Baseline})-1}$
+
+## RMSEA
+
+Root Mean Square Error of Approximation
+
+$RMSEA = \sqrt{\frac{\delta}{df(N-1)}}$
+
+* < .05: close fit
+* < .08: reasonable fit
+- > .10: poor fit
+
+## Measurement Model
+
+We have so far talked about structural relationships between observed variables. Now let's move on to latent variables.
+
+$\mathbf{x= \tau_x + \Lambda_x \xi+ \delta}$
+
+* $\mathbf{x} =(x_1, \cdots, x_q)’$ vector of $x$-side indicators
+* $\tau_x$ vector of $q$ intercepts for $x$-side indicators
+* $\chi$ vector of $n$ latent exogenous variables
+* $\mathbf{\delta}= ( \delta_1, \cdots, \delta_q)’$ vector of residuals for $x$-side indicators
+* $\mathbf{\Lambda_x}$ matrix of loadings ($q$ x $n$) corresponding to the latent exogenous variables
+* $\theta_\delta$ variance or covariance of the residuals for $x$-side indicators
+
+## Measurement Model
+
+Let's inspect this visually:
+
+![Measurement Model with three indicators](.\images\measurement.png)
+
+## Identification {.scrollable}
+
+If we have a one factor model and three indicators, we quickly run into problems regarding the possible identification of the model. We have (3*4)/2=6 known values but we have to estimate seven parameters (three loadings, three residual variances, one factor variance). What do?
+
+1. Marker Method: fixing the first loading to 1 (you will know that)
+2. variance standardization: fixing the variance of each factor to 1.
+
+## Marker Method {.scrollable}
+
+$\Sigma(\theta)=
+\phi_{11}
+\begin{pmatrix}
+1 \\
+\lambda^{x}_{2} \\
+\lambda^{x}_{3}
+\end{pmatrix}
+\begin{pmatrix}
+1 & \lambda^{x}_{2} & \lambda^{x}_{3} \\
+\end{pmatrix}
++
+\begin{pmatrix}
+\theta^{\delta}_{11} & 0 & 0 \\
+0 & \theta^{\delta}_{22} & 0 \\
+0 & 0 & \theta^{\delta}_{33} \\
+\end{pmatrix}$
+
+## Variance Standardization {.scrollable}
+
+$\Sigma(\theta)=
+(1)
+\begin{pmatrix}
+\lambda^{x}_{1} \\
+\lambda^{x}_{2} \\
+\lambda^{x}_{3}
+\end{pmatrix}
+\begin{pmatrix}
+\lambda^{x}_{1} & \lambda^{x}_{2} & \lambda^{x}_{3} \\
+\end{pmatrix}
++
+\begin{pmatrix}
+\theta^{\delta}_{11} & 0 & 0 \\
+0 & \theta^{\delta}_{22} & 0 \\
+0 & 0 & \theta^{\delta}_{33} \\
+\end{pmatrix}$
+
+## Test a 1 factor CFA {.scrollable}
+
+By default, lavaan uses the marker method
+
+```{r}
+m5a <- '
+  Bout =~ bout_1_t1 + bout_2_t1 + bout_3_t1
+  # Intercepts
+  bout_1_t1 ~ 1
+  bout_2_t1 ~ 1
+  bout_3_t1 ~ 1
+'
+fit5a <- sem(m5a,data=df)
+summary(fit5a,standardized=TRUE)
+```
+
+std.lv refers to standardization based on the variance of the latent variable, std.all refers to standardization based on the latent variable plus the observed variable.
+
+## Test a 1 factor CFA {.scrollable}
+
+...but we can override this
+
+```{r}
+m5a.1 <- '
+  Bout =~ NA*bout_1_t1 + bout_2_t1 + bout_3_t1
+  # Intercepts
+  bout_1_t1 ~ 1
+  bout_2_t1 ~ 1
+  bout_3_t1 ~ 1
+  # Variance of Bout to 1
+  Bout ~~ 1*Bout
+'
+fit5a.1 <- sem(m5a.1,data=df)
+summary(fit5a.1,standardized=TRUE)
+```
+
+Note how the Std.lv estimates are equal to the "unstandardized" estimates. Why?
+
+## Endogenous Latent variables {.scrollable}
+
+If we have a latent variable that is endogenous, we need a residual variance. Also, the notation is slightly different (but not too much...). The latent variable is now named $\eta$ and has its own residual variance :)
+
+$\mathbf{y= \tau_y + \Lambda_y \eta + \epsilon}$
+
+## Endogenous Latent Variables {.scrollable}
+
+![Endogenous Latent Variables](.\images\endlv.png)
+
+Note that $\zeta$ is given by the structural model, not the measurement model!
+
+## Structural Regression Model {.scrollable}
+
+Now we put everything together:
+
+![Structural Model](.\images\structural1.png)
+
+
+## Structural Regression Model {.scrollable}
+
+Fitting a structural regression model, we unify measurement and structural models.
+
+$\mathbf{x= \tau_x + \Lambda_x \xi+ \delta}$
+$\mathbf{y= \tau_y + \Lambda_y \eta + \epsilon}$
+$\mathbf{\eta = \alpha + B \eta + \Gamma \xi + \zeta}$
+
+
+## Structural Regression Model
+
+Let's put the measurement models from above into matrix notation
+
+$\begin{pmatrix}
+x_{1} \\
+x_{2} \\
+x_{3} \\
+x_{4} \\
+x_{5} \\
+x_{6} \\
+\end{pmatrix}
+=
+\begin{pmatrix}
+\tau_{x_{1}} \\
+\tau_{x_{2}} \\
+\tau_{x_{3}} \\
+\tau_{x_{4}} \\
+\tau_{x_{5}} \\
+\tau_{x_{6}}
+\end{pmatrix}
++
+\begin{pmatrix}
+\lambda^{x}_{11} & \lambda^{x}_{12} \\
+\lambda^{x}_{21} & \lambda^{x}_{22} \\
+\lambda^{x}_{31} & \lambda^{x}_{32} \\
+\lambda^{x}_{41} & \lambda^{x}_{42} \\
+\lambda^{x}_{51} & \lambda^{x}_{52} \\
+\lambda^{x}_{61} & \lambda^{x}_{62}
+\end{pmatrix}
+\begin{pmatrix}
+\xi_{1} \\
+\xi_{2}
+\end{pmatrix}
++
+\begin{pmatrix}
+\delta_{1} \\
+\delta_{2} \\
+\delta_{3} \\
+\delta_{4} \\
+\delta_{5} \\
+\delta_{6}
+\end{pmatrix}$
+
+$\begin{pmatrix}
+y_{1} \\
+y_{2} \\
+y_{3}
+\end{pmatrix}
+=
+\begin{pmatrix}
+\tau_{y_{1}} \\
+\tau_{y_{2}} \\
+\tau_{y_{3}}
+\end{pmatrix}
++
+\begin{pmatrix}
+\lambda^{y}_{11} \\
+\lambda^{y}_{21} \\
+\lambda^{y}_{31}
+\end{pmatrix}
+\begin{pmatrix}
+\eta_{1}
+\end{pmatrix}
++
+\begin{pmatrix}
+\epsilon_{1}\\
+\epsilon_{2} \\
+\epsilon_{3}
+\end{pmatrix}$
+
+## Structural Regression
+
+
+$\eta_{1}
+=
+\alpha_1
++
+\begin{pmatrix}
+\gamma_{11} & \gamma_{12}
+\end{pmatrix}
+\begin{pmatrix}
+\xi_1 \\
+\xi_2
+\end{pmatrix}
++
+0 \cdot \eta_1
++
+\zeta_{1}$
+
+
+## Structural Regression
+
+```{r}
+m6a <- '
+
+  # Measurement Models
+  Bout =~ bout_1_t1 + bout_2_t1 + bout_3_t1
+  Recov =~ recov_1_t1 + recov_2_t1 + recov_3_t1
+  Detach =~ psysa_1_t1+psysa_2_t1+psysa_3_t1
+  
+  #structural model
+  Bout ~ Recov + Detach
+'
+fit6a <- sem(m6a,data=df)
+summary(fit6a,standardized=TRUE,fit.measures=TRUE)
+```
+
+
+## Structural regression model with two endogenous variables
+
+Now we need both matrices, the $\Gamma$ and the $\B$ matrix as we have endogenous to endogenous relationships in our model.
+
+$\begin{pmatrix}
+\eta_{1} \\
+\eta_{2}
+\end{pmatrix}
+=
+\begin{pmatrix}
+\alpha_1 \\
+\alpha_2
+\end{pmatrix}
++
+\begin{pmatrix}
+\gamma_{11}\\
+\gamma_{21}
+\end{pmatrix}
+\xi_1
++
+\begin{pmatrix}
+0 & 0\\
+\beta_{21} & 0
+\end{pmatrix}
+\begin{pmatrix}
+\eta_1 \\
+\eta_2
+\end{pmatrix}
++
+\begin{pmatrix}
+\zeta_{1}\\
+\zeta_{2}
+\end{pmatrix}$
+
+Writing out the equations we get
+
+$\eta_{1}
+=
+\alpha_1
++
+\gamma_{11} \xi_1
++
+\zeta_{1}$
+
+$\eta_{2}
+=
+\alpha_2
++
+\gamma_{21} \xi_1
++
+\beta_{21} \eta_1
++
+\zeta_{2}$
+
+## Structural Model
+
+...which now looks like this
+
+![Structural Model](.\images\structural2.png)
+
+
+## Structural Model
+
+```{r}
+m6b <- '
+  # Measurement Model
+  Bout =~ bout_1_t1 + bout_2_t1 + bout_3_t1
+  Recov =~ recov_1_t1 + recov_2_t1 + recov_3_t1
+  Psysa =~ psysa_1_t1 + psysa_2_t1 + psysa_3_t1
+  
+  # regressions
+  Bout ~ Recov
+  Psysa ~ Bout + Recov
+'
+
+fit6b <- sem(m6b,data=df)
+summary(fit6b,standardized=TRUE,fit.measures=TRUE)
+
+```
+
+
+## Fixing certain parameters
+
+We can fix virtually any parameter to any value.
+
+```{r}
+m6c <- '
+  # Measurement Model
+  Bout =~ bout_1_t1 + bout_2_t1 + bout_3_t1
+  Recov =~ recov_1_t1 + recov_2_t1 + recov_3_t1
+  Psysa =~ psysa_1_t1 + psysa_2_t1 + psysa_3_t1
+  
+  # regressions
+  Bout ~ -0.5*Recov
+  Psysa ~ Bout + Recov
+  
+'
+
+fit6c <- sem(m6c,data=df)
+summary(fit6c,standardized=TRUE,fit.measures=TRUE)
+```
+
+## Conclusion
+
+![Conclusion](.\images\conclusion.png)
+
