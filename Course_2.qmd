@@ -184,7 +184,7 @@ observe differences (on average) across teams
 
 ![](.\images\within1.png)
 
-
+## within only
 
 ```{r}
 model3 <- '
@@ -218,6 +218,7 @@ model3 <- '
 
 ![](.\images\between.png)
 
+## between only
 
 ```{r}
 model4 <- '
@@ -249,11 +250,11 @@ agreement) if indeed ‘leadership quality’ is a shared construct
 
 
 ## Shared between-level
-::::{columns}
-::{.column width=40%}
+
 ![](.\images\sharedbetween.png)
-::
-::{.column width=60%}
+
+
+## shared between-level
 
 ```{r}
 model4 <- '
@@ -271,35 +272,27 @@ model4 <- '
 '
 
 ```
-::
-::::
+
 
 ## Configural Construct
 
-• indicators of the latent variable are measured at the within level
-• level at which construct is of interest: both within and between level
-• interpretation at the within/between level: construct explains the covariances
-of the within/between part of its indicators
-• the configural construct (at the between level) represents the aggregate of
+* indicators of the latent variable are measured at the within level
+* level at which construct is of interest: both within and between level
+* interpretation at the within/between level: construct explains the covariances of the within/between part of its indicators the configural construct (at the between level) represents the aggregate of
 the measurements of individuals within a cluster
-• example: reading motivation:
-– at the individual level (within cluster)
-– at the school level (average student motivation within a school)
-• the cluster itself is not seen as the source/reason for variability of an individual construct
-• therefore, between-cluster loadings are fixed to be the same as within-cluster
-loadings (cross-level measurement invariance)
-
-
+* example: reading motivation:
+* at the individual level (within cluster)
+* at the school level (average student motivation within a school)
+* the cluster itself is not seen as the source/reason for variability of an individual construct
+* therefore, between-cluster loadings are fixed to be the same as within-cluster loadings (cross-level measurement invariance)
 
 
 
 ## Configural
 
-::::{columns}
-::{.column width=40%}
+
 ![](.\images\configural.png)
-::
-::{.column width=60%}
+
 
 ```{r}
 model4 <- '
@@ -314,8 +307,6 @@ model4 <- '
 '
 
 ```
-::
-::::
 
 
 ## Stepwise approach
